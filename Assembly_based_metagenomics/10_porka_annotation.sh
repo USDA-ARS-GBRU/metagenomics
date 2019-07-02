@@ -4,7 +4,7 @@
 #SBATCH --error=porka_bybins_%A_%a.err
 #SBATCH --time=04:00:00
 #SBATCH --array=1-19
-#SBATCH -p mem
+#SBATCH -p short
 #SBATCH -N 1
 #SBATCH -n 40
 

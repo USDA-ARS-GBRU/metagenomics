@@ -2,8 +2,8 @@
 #SBATCH --job-name=metabat
 #SBATCH --output=anvi-metabat_%A_%a.out
 #SBATCH --error=anvi-metabat_%A_%a.err
-#SBATCH --time=48:00:00
-#SBATCH -p mem
+#SBATCH --time=04:00:00
+#SBATCH -p short
 #SBATCH -N 1
 #SBATCH -n 40
 
