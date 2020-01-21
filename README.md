@@ -360,3 +360,119 @@ PROKKA_11302018.txt
 ```
 
 
+# HUMAnN2
+HUMAnN is a pipeline for efficiently and accurately profiling the presence/absence and abundance of microbial pathways and genes using shotgun metagenomics data. HUMAnN2 first search the reads against a database of known genes with known function. Unaligned/unmapped reads are translated and search against protein databases (UniRef90 / UniRef50). You can read more about HUMANn2 on the [paper](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6235447/) and [repo](https://bitbucket.org/biobakery/humann2/wiki/Home)
+
+- HUMAnN2 used ChocoPhlAn database; proprietary database created by clustering the NCBI coding sequences.
+- Taxonomic profiling in HUMAnN2 in based on MetaPhlan2.
+- HUMAnN2 not only Profile the presence/absence (pathways coverage file), but also the abundance of microbial pathways in a community (pathways abundance file).
+![humann2](https://github.com/ravinpoudel/metagenomics/blob/master/humann2.jpg)
+
+_**Franzosa et. al. (2018)**_
+
+Running HUMAnN2 is quite minimal in term of scripting, but the code ran multiple steps as described in the following workflow. The main output from the HUMAnN2 includes three files:
+
+# Output from HUMAnN2
+**-Gene families file**
+* Abundance of each gene family in the community. These gene lists are used as a construct in MetaCyc reactions to build the MetaCyc pathways.
+
+**-Pathway abundance file**
+* Abundance of MetaCyc pathways in each sample. HUMAnN2 uses MetaCyc pathway definitions and MinPath to identify a parsimonious set of pathways which explain observed reactions in the community.
+
+**-Pathway coverage file**
+* How well the pathways in the "Pathway abundance" file are covered by the genes predicted in the Gene families file.
+
+### Note: 
+Quantification of genes and pathways in HUMAn2 is units of RPKs (reads per kilobase). RPKs accounts for gene length but not sample sequencing depth. Options to normalize to relative abundance or copies per million (CPM) units are available. Both of these techniques follow the constant sum constraints, where in relative abundance samples are constrained to sum to 1, and samples are constrained to sum to 1 million in CPM.
+
+
+In the temporary files, we can find the file "...bug_list" which provide the taxonomic profile. 
+
+# Pipeline
+
+# Step 1: Run humann2.sh 
+
+```
+#!/bin/bash
+#SBATCH --job-name=humanN2
+#SBATCH --output=humanN2_%A_%a.out
+#SBATCH --error=humanN2_%A_%a.err
+#SBATCH --time=24:00:00
+#SBATCH --array=1-12
+#SBATCH -p short
+#SBATCH -N 1
+#SBATCH -n 40
+
+module load miniconda
+source activate humanN2
+module load pigz
+
+
+RUN=${SLURM_ARRAY_TASK_ID}
+echo "My Slurm RUN_ID: '${RUN}'"
+
+
+infile1=$(ls rqc_data/merged_fastqByRelicates/*_interleaved_merge.fq.gz| sed -n ${RUN}p)
+echo "$infile1"
+
+
+humann2 --threads 30 --input $infile1 --nucleotide-database rqc_data/chocophlan --protein-database rqc_data/uniref50/uniref --bowtie2 /home/ravin.poudel/.conda/envs/humanN2/bin/metaphlan_databases/ --search-mode uniref50 --output humann2_uniref50_merged_out/
+```
+
+For each sample(fastq), there are three output files:
+* _pathcoverage.tsv
+* _pathabundance.tsv
+* _genefamilies.tsv
+
+# Step 2: Merge output into a single file, and normalize.
+
+```
+#!/bin/bash
+#SBATCH --job-name=mf
+#SBATCH --output=mf_%A_%a.out
+#SBATCH --error=mf_%A_%a.err
+#SBATCH --time=00:30:00
+#SBATCH -p short
+#SBATCH -N 1
+#SBATCH -n 10
+
+
+module load miniconda
+source activate humanN2
+module load pigz
+
+
+
+# Merge all genefiles into single file
+humann2_join_tables -i humann2_uniref50_merged_out/ -o all_genefamilies.tsv --file_name genefamilies 
+humann2_join_tables -i humann2_uniref50_merged_out/ -o all_pathabundance.tsv --file_name pathabundance 
+humann2_join_tables -i humann2_uniref50_merged_out/ -o all_pathcoverage.tsv --file_name pathcoverage 
+
+
+# # To facilitate comparisons between samples with different sequencing depths, it is beneficial to normalize gene
+# family and pathway abundance RPK values to compositional units (copies per million or relative abundance)
+
+
+# copies per million 
+humann2_renorm_table -i all_genefamilies.tsv -o all_genefamilies_cpm.tsv --units cpm
+humann2_renorm_table -i all_pathabundance.tsv -o all_pathabundance_cpm.tsv --units cpm
+
+# relative abundance
+humann2_renorm_table -i all_genefamilies.tsv -o all_genefamilies_relab.tsv --units relab
+humann2_renorm_table -i all_pathabundance.tsv -o all_pathabundance_relab.tsv --units relab
+```
+
+# Step 3: Taxonomic profile 
+Find the file name with *_bugs_list.tsv inside the temp output folders from step1, then cp them into a single folder, and merge to create a single file.
+
+```
+ mkdir bug_list
+ cp $(pwd)/**/*_bugs_list.tsv bug_list
+ merge_metaphlan_tables.py *_bugs_list.tsv > merged_bugs_list.tsv
+
+```
+# Note: 
+Since sequence-based profiling is relative and does not provide absolute cellular abundance measures, clades are hierarchically summed. Each level will sum to 100%; that is, the sum of all kindom-level clades is 100%, the sum of all genus-level clades (including unclassified) is also 100%, and so forth.
+
+
+
