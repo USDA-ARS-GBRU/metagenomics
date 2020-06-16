@@ -18,7 +18,7 @@ Prior to genome assembly, reads are cleaned using a custom [ARS-RQC pipeline](ht
 
 _1-1. Create a conda environment_
 
-```
+```bash
 conda create -n Ametagenomics python=3.6
 source activate Ametagenomics
 conda install pandas
@@ -30,7 +30,7 @@ conda install -c bioconda bbmap
 
 _1-2. Get ars-rqc from the repository and install the editable version. This allows to auto-update the changes made in the repository – so that the used program will be the most recent one._
 
-```	
+```bash	
 git clone https://github.com/USDA-ARS-GBRU/ARS-RQC.git
 cd ARS-RQC
 pip install --editable .
@@ -38,7 +38,7 @@ pip install --editable .
 
 _1-3. Soft link the input files from collaborator’s raw-data directory._
 
-```
+```bash
 mkdir data
 cd data
 ln -vs /project/**/**/*.fastq.gz .
@@ -46,7 +46,7 @@ ln -vs /project/**/**/*.fastq.gz .
 			
 _1-4. Run `01_arsqc_interleave.sh` to create interleaved fastq._
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=rqc_interleave_Ametagenomics
 #SBATCH --output=rqc_Ametagenomics_%A_%a.out
@@ -81,7 +81,7 @@ reformat.sh in=$infile1 in2=$infile2 out=$outfile
 
 _1-5. Run  `02_arsqc_filer.sh` to run qc on fastq._
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=rqc_filter_Ametagenomics
 #SBATCH --output=rqc_Ametagenomics_%A_%a.out
@@ -112,7 +112,7 @@ time rqcfilter.py --fastq $itl_file --output "$rootdir"rqc_data -p
 
 _1-6. Run `03_parse_json.py` – create a summary data-frame using json files obtained from qc. This file is then analyzed in R to create qc-report using R markdown._
 
-```
+```python
 import json
 import pandas as pd
 import os
@@ -144,14 +144,14 @@ At this point, we have clean reads that are ready for assembling to contigs. Giv
 _2-1. Create a list of files, open in text editor, then find carry-over and replace with comma, then delete comma at the EOF. This information will be pass as input files for genome assembly in megahit._
 
 
-```
+```bash
 find /project/rqc_data/reads/** -type f > file_list_withpath.txt
 
 ```
 
 _2-2. Run genome assembly `04_megahit.sh`_
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=megahit_assembly
 #SBATCH --output=megahit_assembly_%A_%a.out
@@ -180,7 +180,7 @@ Output obtained after the assembly is also a fasta file, assembled contig. This 
 _3-1. Run `05_merge_interleaved_fastq.sh` to merge fastq by technical replicates._
 
 
-```
+```bash
 #!/bin/bas
 #SBATCH --job-name=merge
 #SBATCH --output=merge_%A_%a.out
@@ -205,7 +205,7 @@ cat reads/C2W*.fq.gz > merged_fastqByRelicates/C2W_interleaved_merge.fq.gz
 
 _3-2. Also, prior to mapping reads, the genome needs to be indexed. This can be done using `bowtie2-build` function form bowtie2. Run `06_index_genome.sh`._
 
-```
+```bash
 #!/bin/bash
 
 #SBATCH --job-name=index_contig
@@ -226,7 +226,7 @@ bowtie2-build megahit_output/final.contigs.fa megahit_output/contigs
 
 _3-3. Run `07_mapping.sh` to map reads to assembled genome using bowtie2._
 
-```
+```bash
 #!/bin/bash
 
 #SBATCH --job-name=bowtie_map
@@ -266,7 +266,7 @@ At this point, we have obtained a large genomic fragment (genomic mess) represen
 
 _4-1. Run `08_metabat.sh`_
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=metabat
 #SBATCH --output=anvi-metabat_%A_%a.out
@@ -288,7 +288,7 @@ runMetaBat.sh -m 5000 /project/megahit_output/final.contigs.fa /project/mapping/
 
 _5-1. Run `09_checkM.sh`_
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=CHECKM
 #SBATCH --output=anvi-metabat_%A_%a.out
@@ -311,7 +311,7 @@ To retrieve the relevant genomic features from the MAGs, we use [prokka](https:/
 
 _6-1. Run `10_porka_annotation.sh`, which usages prokka_
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=PORKA
 #SBATCH --output=porka_bybins_%A_%a.out
@@ -343,7 +343,7 @@ prokka $infile --outdir $outdirect --prefix $outbase --addgenes --addmrna --cent
 
 For each MAGs, prokka provides the following files as output. These outputs can be explored for other downstream analyses such as metabolic pathways. 
 
-```
+```bash
 PROKKA_11302018.daa ## useful to explore using megan
 PROKKA_11302018.err
 PROKKA_11302018.faa
@@ -392,7 +392,7 @@ In the temporary files, we can find the file "...bug_list" which provide the tax
 
 # Step 1: Run humann2.sh 
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=humanN2
 #SBATCH --output=humanN2_%A_%a.out
@@ -426,7 +426,7 @@ For each sample(fastq), there are three output files:
 
 # Step 2: Merge output into a single file, and normalize.
 
-```
+```bash
 #!/bin/bash
 #SBATCH --job-name=mf
 #SBATCH --output=mf_%A_%a.out
@@ -465,7 +465,7 @@ humann2_renorm_table -i all_pathabundance.tsv -o all_pathabundance_relab.tsv --u
 # Step 3: Taxonomic profile 
 Find the file name with *_bugs_list.tsv inside the temp output folders from step1, then cp them into a single folder, and merge to create a single file.
 
-```
+```bash
  mkdir bug_list
  cp $(pwd)/**/*_bugs_list.tsv bug_list
  merge_metaphlan_tables.py *_bugs_list.tsv > merged_bugs_list.tsv
